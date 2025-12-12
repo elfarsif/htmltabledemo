@@ -10,7 +10,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
 window.addEventListener("message", (event) => {
   const root = document.getElementById("root");
+  if (!root) return;
 
-  if (root) {
-    root.textContent = "hello agentos"+JSON.stringify(event.data);
-  }});
+  root.textContent =
+    "hello agentos\n\n" +
+    JSON.stringify(event.data, null, 2);
+                       
+);
