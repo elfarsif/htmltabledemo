@@ -8,3 +8,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
+window.addEventListener("message", (event) => {
+  const root = document.getElementById("root");
+
+  if (root) {
+    root.textContent = "hello agentos";
+  }});
