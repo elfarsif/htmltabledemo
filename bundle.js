@@ -8,6 +8,3 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-window.addEventListener("message", (event) => {
-  console.log("event from agent os");
-});
