@@ -1,11 +1,194 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <meta charset="UTF-8" />
+    <title>Agent Risk Table</title>
+
+    <style>
+      :root {
+        --primary: hsl(187 78% 23%);
+        --primary-light: hsl(187 78% 93%);
+        --border: #e5e7eb;
+        --text-main: #111827;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        margin: 0;
+        padding: 8px;
+        background: #ffffff;
+        color: var(--text-main);
+      }
+
+      /* ───────────── Table Container ───────────── */
+
+      .table-container {
+        max-height: 600px;
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #ffffff;
+      }
+
+      /* ───────────── Table ───────────── */
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-size: 13px;
+      }
+
+      th,
+      td {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: top;
+        word-wrap: break-word;
+        white-space: normal;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        background: var(--primary);
+        color: #ffffff;
+        font-weight: 600;
+        z-index: 2;
+        user-select: none;
+      }
+
+      th:hover {
+        filter: brightness(0.95);
+      }
+
+      td {
+        max-height: 64px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      tr:hover td {
+        background: var(--primary-light);
+      }
+
+      /* ───────────── Filter Icon ───────────── */
+
+      .filter-icon {
+        position: relative; /* anchor dropdown here */
+        font-size: 11px;
+        opacity: 0.85;
+        margin-left: 6px;
+        cursor: pointer;
+        display: inline-block;
+      }
+
+      /* ───────────── Dropdown ───────────── */
+
+      .filter-dropdown {
+        position: absolute;
+        top: 130%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #ffffff;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        min-width: 220px;
+        max-width: 280px;
+        max-height: 240px;
+        overflow-y: auto;
+        z-index: 9999;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        animation: fadeIn 0.12s ease-out;
+        color: #111827;
+      }
+
+      .filter-dropdown::before {
+        content: "";
+        position: absolute;
+        top: -6px;
+        left: 50%;
+        transform: translateX(-50%);
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-bottom: 6px solid #ffffff;
+      }
+
+      .filter-dropdown-header {
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #374151;
+        border-bottom: 1px solid #e5e7eb;
+        background: #f9fafb;
+      }
+
+      .filter-option {
+        padding: 6px 10px;
+        font-size: 13px;
+        cursor: pointer;
+        color: #111827;
+        white-space: nowrap;
+      }
+
+      .filter-option:hover {
+        background: #f3f4f6;
+      }
+
+      .filter-option.active {
+        font-weight: 600;
+        background: var(--primary-light);
+        color: #0f172a;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translate(-50%, -4px);
+        }
+        to {
+          opacity: 1;
+          transform: translate(-50%, 0);
+        }
+      }
+      
+      /* ───────────── Risk Badges ───────────── */
+      .risk-badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      .risk-low {
+        background: #ecfdf5;
+        color: #065f46;
+      }
+
+      .risk-medium {
+        background: #fffbeb;
+        color: #92400e;
+      }
+
+      .risk-high {
+        background: #fef2f2;
+        color: #991b1b;
+      }
+      
+    </style>
   </head>
 
   <body>
-    
+    <div class="table-container">
       <div id="root"></div>
+    </div>
 
     <script src="bundle.js"></script>
   </body>
