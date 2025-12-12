@@ -1,7 +1,11 @@
 
 
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("hello");
+   const root = document.getElementById("root");
+
+  if (root) {
+    root.textContent = "hello";
+  }
 });
 
 window.addEventListener("message", (event) => {
