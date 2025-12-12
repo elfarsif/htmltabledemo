@@ -12,5 +12,5 @@ window.addEventListener("message", (event) => {
   const root = document.getElementById("root");
 
   if (root) {
-    root.textContent = "hello agentos";
+    root.textContent = "hello agentos"+event.data;
   }});
