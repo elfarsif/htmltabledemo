@@ -2,10 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Empty Page</title>
+    <title>Table + Bundle</title>
   </head>
   <body>
-    123
+    <table id="data-table">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Type</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- JS will populate rows -->
+      </tbody>
+    </table>
+
+    <!-- your bundled script (e.g., Vite/Webpack/Rollup output) -->
+    <script src="/bundle.js"></script>
   </body>
 </html>
-
