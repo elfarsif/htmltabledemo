@@ -1,28 +1,138 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GH Pages JS Library Test</title>
+    <title>Clause Map (Contract Risk Index)</title>
+
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 12px; }
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 12px; margin: 0; }
+      h2 { margin: 0 0 10px; }
+      .muted { color: #666; font-size: 12px; }
+
+      /* Keep your table styles (optional) */
       table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
       th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-      #chartWrap { max-width: 700px; }
+
+      /* Clause map layout */
+      .layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 12px;
+        align-items: start;
+      }
+      @media (max-width: 900px) {
+        .layout { grid-template-columns: 1fr; }
+      }
+
+      .panel {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #fff;
+        overflow: hidden;
+      }
+
+      .panel-header {
+        padding: 10px 12px;
+        border-bottom: 1px solid #eee;
+        font-weight: 600;
+      }
+
+      .clause-list {
+        max-height: 420px;
+        overflow: auto;
+      }
+
+      .clause-btn {
+        width: 100%;
+        text-align: left;
+        padding: 10px 12px;
+        border: 0;
+        background: transparent;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid #f2f2f2;
+      }
+      .clause-btn:hover { background: #f7f7f7; }
+      .clause-btn.active { background: #efefef; }
+
+      .badge {
+        display: inline-block;
+        border: 1px solid #ddd;
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 12px;
+        color: #333;
+        white-space: nowrap;
+      }
+
+      /* Visualization area */
+      #clauseVisWrap { padding: 10px; }
+      #clauseVis svg { width: 100%; height: 360px; display: block; }
+
+      /* Tooltip */
+      .tip {
+        position: fixed;
+        pointer-events: none;
+        z-index: 9999;
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 12px;
+        display: none;
+        max-width: 420px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+      }
+
+      /* Details box */
+      .details {
+        margin-top: 10px;
+        border-top: 1px solid #eee;
+        padding-top: 10px;
+        font-size: 14px;
+      }
+      .details h3 { margin: 0 0 6px; font-size: 15px; }
+      .details .kv { margin: 6px 0; }
+      .details .k { font-weight: 600; }
     </style>
   </head>
 
   <body>
-    <h2>Table</h2>
-    <div id="root"></div>
-
-    <h2>Chart.js (library load test)</h2>
-    <div id="chartWrap">
-      <canvas id="myChart"></canvas>
+    <h2>Clause Map</h2>
+    <div class="muted" style="margin-bottom:12px;">
+      Click a clause group on the left to see related risks. Hover dots for a tooltip. Click a dot for details.
     </div>
 
-    <!-- Load a JS library from a CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Optional: keep your table -->
+    <h2 style="margin-top:0;">Table</h2>
+    <div id="root"></div>
+
+    <div class="layout" style="margin-top: 12px;">
+      <!-- Left: Clause index -->
+      <div class="panel">
+        <div class="panel-header">Clause Groups</div>
+        <div id="clauseList" class="clause-list"></div>
+      </div>
+
+      <!-- Right: Visualization + details -->
+      <div class="panel">
+        <div class="panel-header" id="selectedClauseTitle">Select a clause group</div>
+        <div id="clauseVisWrap">
+          <div id="clauseVis"></div>
+          <div id="details" class="details">
+            <div class="muted">Click a risk dot to see evidence + mitigation.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tip" class="tip"></div>
+
+    <!-- D3 -->
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 
     <script>
       const fallback = {
@@ -32,6 +142,44 @@
 
       let originalData = fallback;
 
+      // -------------------- helpers --------------------
+      function parseNum(v) {
+        const m = String(v ?? "").match(/\d+/);
+        return m ? +m[0] : NaN;
+      }
+
+      function clauseGroupFromRef(ref) {
+        // Simple heuristic: take the first "chunk" before comma/section markers.
+        // Examples:
+        // "Exhibit D, F2 (DSP), Section 4..." -> "Exhibit D"
+        // "BCP Exhibit F, BIA Section..."      -> "BCP Exhibit F"
+        // "Exhibit F3, Section 2.12 (Audit)"   -> "Exhibit F3"
+        const s = String(ref ?? "").trim();
+        if (!s) return "Unspecified";
+        return s.split(",")[0].trim();
+      }
+
+      function normalizeRisks(data) {
+        if (!data?.rows?.length || !data?.columns?.some(c => c.key === "risk_title")) return [];
+        return data.rows.map((r, i) => {
+          const sev = parseNum(r.severity);
+          const lik = parseNum(r.likelihood);
+          return {
+            id: String(i),
+            title: r.risk_title ?? `Risk ${i+1}`,
+            type: r.risk_type ?? "Unknown",
+            severity: isNaN(sev) ? 0 : sev,
+            likelihood: isNaN(lik) ? 0 : lik,
+            clauseRef: r.clause_reference ?? "",
+            clauseGroup: clauseGroupFromRef(r.clause_reference),
+            evidence: r.evidence ?? "",
+            mitigation: r.mitigation_suggestion ?? "",
+            dept: r.responsible_department ?? ""
+          };
+        });
+      }
+
+      // -------------------- TABLE (your original) --------------------
       function renderTable() {
         const root = document.getElementById("root");
         if (!root) return;
@@ -64,29 +212,190 @@
         root.appendChild(table);
       }
 
-      function renderChart() {
-        const ctx = document.getElementById("myChart");
-        if (!ctx || !window.Chart) return;
+      // -------------------- CLAUSE MAP --------------------
+      let risks = [];
+      let clauseGroups = [];
+      let selectedClause = null;
 
-        new Chart(ctx, {
-          type: "bar",
-          data: {
-            labels: ["A", "B", "C", "D"],
-            datasets: [{
-              label: "Library render works",
-              data: [12, 19, 3, 5]
-            }]
-          }
+      const tip = d3.select("#tip");
+      function showTip(event, html) {
+        tip.style("display", "block")
+          .style("left", (event.clientX + 12) + "px")
+          .style("top", (event.clientY + 12) + "px")
+          .html(html);
+      }
+      function hideTip() { tip.style("display", "none"); }
+
+      function renderClauseList() {
+        const list = document.getElementById("clauseList");
+        list.innerHTML = "";
+
+        clauseGroups.forEach(g => {
+          const btn = document.createElement("button");
+          btn.className = "clause-btn" + (g.key === selectedClause ? " active" : "");
+          btn.onclick = () => {
+            selectedClause = g.key;
+            renderClauseList();
+            renderClauseVis();
+          };
+
+          const left = document.createElement("div");
+          left.textContent = g.key;
+
+          const right = document.createElement("span");
+          right.className = "badge";
+          right.textContent = `${g.count} risk${g.count === 1 ? "" : "s"}`;
+
+          btn.appendChild(left);
+          btn.appendChild(right);
+          list.appendChild(btn);
         });
       }
 
-      document.addEventListener("DOMContentLoaded", () => {
+      function renderDetails(r) {
+        const box = document.getElementById("details");
+        box.innerHTML = `
+          <h3>${escapeHtml(r.title)}</h3>
+          <div class="kv"><span class="k">Clause:</span> ${escapeHtml(r.clauseRef)}</div>
+          <div class="kv"><span class="k">Type:</span> ${escapeHtml(r.type)} &nbsp; <span class="k">Dept:</span> ${escapeHtml(r.dept)}</div>
+          <div class="kv"><span class="k">Severity:</span> ${r.severity} &nbsp; <span class="k">Likelihood:</span> ${r.likelihood}</div>
+          <div class="kv"><span class="k">Evidence:</span> ${escapeHtml(r.evidence)}</div>
+          <div class="kv"><span class="k">Mitigation:</span> ${escapeHtml(r.mitigation)}</div>
+        `;
+      }
+
+      function escapeHtml(s) {
+        return String(s ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function renderClauseVis() {
+        const title = document.getElementById("selectedClauseTitle");
+        const container = document.getElementById("clauseVis");
+        container.innerHTML = "";
+        hideTip();
+
+        if (!selectedClause) {
+          title.textContent = "Select a clause group";
+          return;
+        }
+
+        const subset = risks.filter(r => r.clauseGroup === selectedClause);
+        title.textContent = `${selectedClause} — ${subset.length} risk${subset.length === 1 ? "" : "s"}`;
+
+        const W = container.clientWidth ? Math.min(980, container.clientWidth) : 980;
+        const H = 360;
+        const m = { t: 20, r: 20, b: 40, l: 50 };
+
+        const svg = d3.select(container).append("svg")
+          .attr("width", W)
+          .attr("height", H);
+
+        // X: index / "document position" (just spread evenly)
+        const x = d3.scalePoint()
+          .domain(subset.map(d => d.id))
+          .range([m.l, W - m.r])
+          .padding(0.5);
+
+        // Y: severity (higher = higher)
+        const y = d3.scaleLinear()
+          .domain([1, 5])
+          .range([H - m.b, m.t]);
+
+        // Axis
+        svg.append("g")
+          .attr("transform", `translate(0,${H - m.b})`)
+          .call(d3.axisBottom(x).tickFormat(() => "")) // hide labels (too dense)
+          .call(g => g.selectAll(".domain").attr("stroke", "#ddd"));
+
+        svg.append("g")
+          .attr("transform", `translate(${m.l},0)`)
+          .call(d3.axisLeft(y).ticks(5))
+          .call(g => g.selectAll(".domain").attr("stroke", "#ddd"));
+
+        svg.append("text")
+          .attr("x", (m.l + (W - m.r)) / 2)
+          .attr("y", H - 10)
+          .attr("text-anchor", "middle")
+          .attr("class", "muted")
+          .text("Clause group index (each dot is a risk in this clause group)");
+
+        svg.append("text")
+          .attr("transform", `translate(14 ${(m.t + (H - m.b)) / 2}) rotate(-90)`)
+          .attr("text-anchor", "middle")
+          .attr("class", "muted")
+          .text("Severity");
+
+        // Dots sized by likelihood
+        svg.append("g")
+          .selectAll("circle")
+          .data(subset)
+          .join("circle")
+          .attr("cx", d => x(d.id))
+          .attr("cy", d => y(d.severity))
+          .attr("r", d => 5 + (d.likelihood * 2))
+          .attr("fill", "#111827")
+          .attr("opacity", 0.85)
+          .style("cursor", "pointer")
+          .on("mousemove", (e, d) => showTip(e, `
+            <b>${escapeHtml(d.title)}</b><br/>
+            <span class="badge">${escapeHtml(d.type)}</span>
+            <span class="badge">${escapeHtml(d.dept)}</span><br/>
+            Severity: ${d.severity} &nbsp; Likelihood: ${d.likelihood}<br/>
+            <div class="muted">${escapeHtml(d.clauseRef)}</div>
+          `))
+          .on("mouseleave", hideTip)
+          .on("click", (_, d) => renderDetails(d));
+
+        // Labels (short)
+        svg.append("g")
+          .selectAll("text")
+          .data(subset)
+          .join("text")
+          .attr("x", d => x(d.id))
+          .attr("y", d => y(d.severity) - (8 + d.likelihood))
+          .attr("text-anchor", "middle")
+          .attr("font-size", 10)
+          .attr("fill", "#333")
+          .text(d => d.title.length > 18 ? d.title.slice(0, 18) + "…" : d.title);
+      }
+
+      function computeClauseGroups(risks) {
+        const m = new Map();
+        for (const r of risks) {
+          m.set(r.clauseGroup, (m.get(r.clauseGroup) ?? 0) + 1);
+        }
+        return Array.from(m.entries())
+          .map(([key, count]) => ({ key, count }))
+          .sort((a,b) => b.count - a.count || a.key.localeCompare(b.key));
+      }
+
+      function renderAll() {
         renderTable();
-        renderChart();
+
+        risks = normalizeRisks(originalData);
+        clauseGroups = computeClauseGroups(risks);
+
+        // default selection: first group if available
+        if (!selectedClause && clauseGroups.length) selectedClause = clauseGroups[0].key;
+
+        renderClauseList();
+        renderClauseVis();
+      }
+
+      // ---------- INITIAL ----------
+      document.addEventListener("DOMContentLoaded", () => {
+        renderAll();
       });
 
+      // ---------- RECEIVE AGENT PAYLOAD ----------
       window.addEventListener("message", (event) => {
         const data = event.data;
+
         if (
           data?.type === "ui_component_render" &&
           data?.source === "agentos" &&
@@ -94,7 +403,8 @@
           data?.payload?.rows
         ) {
           originalData = data.payload;
-          renderTable();
+          selectedClause = null; // reset selection when new payload arrives
+          renderAll();
         }
       });
     </script>
