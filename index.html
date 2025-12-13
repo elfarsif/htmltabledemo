@@ -1,103 +1,71 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GH Pages JS Library Test</title>
-    <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 12px; }
-      table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
-      th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-      #chartWrap { max-width: 700px; }
-    </style>
-  </head>
+<!doctype html>
+<meta charset="utf-8" />
+<div id="vis"></div>
 
-  <body>
-    <h2>Table</h2>
-    <div id="root"></div>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+<script>
+(async function () {
+  const width = 960, height = 520;
 
-    <h2>Chart.js (library load test)</h2>
-    <div id="chartWrap">
-      <canvas id="myChart"></canvas>
-    </div>
+  const svg = d3.select("#vis")
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height);
 
-    <!-- Load a JS library from a CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  // Simple tooltip
+  const tip = d3.select("body")
+    .append("div")
+    .style("position", "fixed")
+    .style("pointer-events", "none")
+    .style("padding", "6px 8px")
+    .style("border", "1px solid #ccc")
+    .style("background", "white")
+    .style("font", "12px system-ui")
+    .style("display", "none");
 
-    <script>
-      const fallback = {
-        columns: [{ key: "status", label: "Status" }],
-        rows: [{ status: "UI loaded correctly" }]
-      };
+  // Demo points (pretend these were extracted from a contract + geocoded)
+  const points = [
+    { name: "Toronto Office", lat: 43.6532, lon: -79.3832, count: 4 },
+    { name: "Vancouver Site", lat: 49.2827, lon: -123.1207, count: 2 },
+    { name: "New York Vendor", lat: 40.7128, lon: -74.0060, count: 5 },
+  ];
 
-      let originalData = fallback;
+  // World map data (TopoJSON)
+  const world = await d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json");
+  const countries = topojson.feature(world, world.objects.countries);
 
-      function renderTable() {
-        const root = document.getElementById("root");
-        if (!root) return;
+  const projection = d3.geoNaturalEarth1()
+    .fitSize([width, height], countries);
 
-        root.innerHTML = "";
-        const table = document.createElement("table");
+  const path = d3.geoPath(projection);
 
-        const thead = document.createElement("thead");
-        const headerRow = document.createElement("tr");
-        originalData.columns.forEach(col => {
-          const th = document.createElement("th");
-          th.textContent = col.label;
-          headerRow.appendChild(th);
-        });
-        thead.appendChild(headerRow);
-        table.appendChild(thead);
+  // Draw map
+  svg.append("g")
+    .selectAll("path")
+    .data(countries.features)
+    .join("path")
+    .attr("d", path)
+    .attr("fill", "#f3f4f6")
+    .attr("stroke", "#cbd5e1")
+    .attr("stroke-width", 0.6);
 
-        const tbody = document.createElement("tbody");
-        originalData.rows.forEach(row => {
-          const tr = document.createElement("tr");
-          originalData.columns.forEach(col => {
-            const td = document.createElement("td");
-            td.textContent = row[col.key] ?? "";
-            tr.appendChild(td);
-          });
-          tbody.appendChild(tr);
-        });
-
-        table.appendChild(tbody);
-        root.appendChild(table);
-      }
-
-      function renderChart() {
-        const ctx = document.getElementById("myChart");
-        if (!ctx || !window.Chart) return;
-
-        new Chart(ctx, {
-          type: "bar",
-          data: {
-            labels: ["A", "B", "C", "D"],
-            datasets: [{
-              label: "Library render works",
-              data: [12, 19, 3, 5]
-            }]
-          }
-        });
-      }
-
-      document.addEventListener("DOMContentLoaded", () => {
-        renderTable();
-        renderChart();
-      });
-
-      window.addEventListener("message", (event) => {
-        const data = event.data;
-        if (
-          data?.type === "ui_component_render" &&
-          data?.source === "agentos" &&
-          data?.payload?.columns &&
-          data?.payload?.rows
-        ) {
-          originalData = data.payload;
-          renderTable();
-        }
-      });
-    </script>
-  </body>
-</html>
-
+  // Plot dots
+  svg.append("g")
+    .selectAll("circle")
+    .data(points)
+    .join("circle")
+    .attr("cx", d => projection([d.lon, d.lat])[0])
+    .attr("cy", d => projection([d.lon, d.lat])[1])
+    .attr("r", d => 3 + d.count) // scale by something (e.g., # of mentions/risks)
+    .attr("fill", "#111827")
+    .attr("opacity", 0.85)
+    .on("mousemove", (event, d) => {
+      tip.style("display", "block")
+        .style("left", (event.clientX + 12) + "px")
+        .style("top", (event.clientY + 12) + "px")
+        .html(`<b>${d.name}</b><br/>Mentions: ${d.count}`);
+    })
+    .on("mouseleave", () => tip.style("display", "none"));
+})();
+</script>
